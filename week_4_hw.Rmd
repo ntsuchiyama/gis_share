@@ -10,6 +10,7 @@ Packages used for task
 library(tidyverse)
 library(sf)
 ```
+
 1. Read in global gender inequality data 
 
 ```{r message=FALSE, warning=FALSE}
