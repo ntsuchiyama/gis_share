@@ -60,6 +60,10 @@ qtm(gii_world2,
     fill="gii_dif")
 ```
 
+The value of GII range between 0 and 1, with 0 being 0% inequality, indicating women fare equally in comparison to men and 1 being 100% inequality, indicating women fare poorly in comparison to men
+
+Negative values identify where it was become worse between the dates.
+
 ```{r}
 breaks=c(0.0,0.2,0.4,0.6,0.8,1.0)
 diffbreaks=c(-0.4,-0.3,-0.2,-0.1,0,0.1)
@@ -117,6 +121,8 @@ legend <- tm_shape(joinshp) +
 t=tmap_arrange(tm1, tm2, tm3, legend, ncol=2)
 t
 ```
+
+
 
 ```
 
