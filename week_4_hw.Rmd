@@ -9,6 +9,8 @@ Packages used for task
 ```{r message = FALSE, warning=FALSE}
 library(tidyverse)
 library(sf)
+library(janitor)
+library(countrycode)
 ```
 
 1. Read in global gender inequality data 
@@ -19,24 +21,144 @@ gii<- read_csv("HDR21-22_Composite_indices_complete_time_series.csv")
 
 # subset to essential info and gender inequality index in 2010 and 2019
 gii_sub <- gii %>%
-  select(iso3, country, gii_2010, gii_2019)
+  select(iso3, country, region, gii_2010, gii_2019, hdi_2010, hdi_2019) %>%
+  mutate(gii_dif = gii_2019 - gii_2010) %>%
+  mutate(hdi_dif = hdi_2019 - hdi_2010) %>%
+  mutate(iso2 = countrycode(`iso3`, "iso3c", "iso2c"))
+#creating different dataframe just selecting sub saharan africa
+gii_ssa <- gii_sub %>%
+  filter(region == "SSA")
+
 ```
 
 2. Join the global gender inequality index to spatial data of the World, creating a new column of difference in inequality
 
 ```{r}
 # load in spatial data of the world
-world <- read_sf("World_Countries_(Generalized)/World_Countries__Generalized_.shp")
+world <- read_sf("World_Countries_(Generalized).geojson")
 
 # join the gii to the world spatial data
 gii_world <- world %>%
-  left_join(., gii_sub, by = c('ISO' = 'iso3'))
-
-# make column for difference in gii in 2010 and 2019
-gii_sub <- gii_sub %>%
-  mutate(gii_dif = gii_2019 - gii_2010)
+  left_join(., gii_sub, by = c('ISO' = 'iso2'))
+#and the same for sub saharan africa
+gii_ssa_spatial <- world %>%
+  right_join(., gii_ssa, by = c('ISO' = 'iso2'))
 ```
 
-3. Share it with the World on GitHub
 
-4. Add you repository URL to the circulated spreadsheet
+Creating a map - first a basic world map
+
+```{r}
+library(tmap)
+library(tmaptools)
+#first making a quick thematic map
+tmap_mode("plot")
+#just checking the data first 
+qtm(gii_world, fill = "gii_dif")
+#prettier thematic map
+
+tm <- tm_shape(gii_world) +
+  tm_polygons(col = "gii_dif",
+              title = "Difference",
+              style = "pretty",
+              palette = "Spectral",
+              legend.hist = TRUE,
+              border.col = "black",
+              border.lwd = 0.05,
+              border.alpha = 0.2) +
+  tm_layout(legend.outside = TRUE,
+            main.title = "Global change in gender inequality, 2010 to 2019",
+            main.title.size = 0.9,
+            main.title.position = 0.1) 
+tm
+
+```
+Now creating an inset map - first we need the bounding box for sub saharan africa
+```{r}
+ssabbobx <- st_bbox(gii_ssa_spatial,
+                 crs = st_crs(gii_ssa_spatial)) %>%
+  st_as_sfc()
+#and creating variable for world geometry for inset
+world_geom <- world$geometry 
+
+```
+Now creating main map of difference in HDI for SSA
+```{r}
+tmap_mode("plot")
+main_hdi <- tm_shape(gii_ssa_spatial, bbox = ssabbobx) +
+  tm_polygons("hdi_dif",
+              title = "HDI difference",
+              style = "pretty",
+              n = 7,
+              palette = "Spectral") +
+  tm_scale_bar(position = c(0, 0.035), text.size = .75, breaks = c(0, 1000, 2000)) +
+  tm_layout(legend.position = c("left", "center"),
+            legend.text.size = .75,
+            legend.title.size = 1.1,
+            frame = FALSE) +
+  tm_credits("(c) Global gender inequality number", position = c(0.0,0.0)) +
+  tm_compass(type = "arrow", position = c(0.06, 0.15)) +
+  tm_layout(inner.margin=c(0.02,0.02,0.02,0.2))
+main_hdi
+```
+Creating the inset
+```{r}
+inset = tm_shape(world_geom) + tm_polygons() +
+  tm_shape(ssabbobx) +
+  tm_borders(col = "grey40", lwd = 3) +
+  tm_layout(frame = FALSE,
+            bg.color = "transparent") 
+inset  
+```
+Creating two maps - HDI and GII
+```{r}
+hdi <- tm_shape(gii_ssa_spatial, bbox = ssabbobx) +
+  tm_polygons("hdi_dif",
+              title = "HDI",
+              style = "pretty",
+              n = 7,
+              palette = "Spectral") +
+  tm_legend(show = FALSE) +
+  tm_layout(frame = FALSE) +
+  tm_credits("HDI", position = c(0.7, 0.8), size = 1.5)
+gii <- tm_shape(gii_ssa_spatial, bbox = ssabbobx) +
+  tm_polygons("gii_dif",
+              title = "GII",
+              style = "pretty",
+              n = 7,
+              palette = "Spectral") +
+  tm_legend(show = FALSE) +
+  tm_layout(frame = FALSE) +
+  tm_credits("GII", position = c(0.7, 0.8), size = 1.5)
+
+legend <- tm_shape(gii_ssa_spatial) +
+  tm_polygons("hdi_dif",
+              style = "pretty",
+              n = 7) +
+  tm_scale_bar(position=c(0.2,0.04), text.size = .75, breaks = c(0, 1000, 2000, 3000))+
+  tm_compass(north=0, position=c(0.5,0.3))+
+  tm_layout(legend.only = TRUE, legend.position=c(0.2,0.25),asp=0.1)+
+  tm_credits("(c) Mike! Don't trust this legend", position=c(0.2,0.0))
+
+
+t = tmap_arrange(hdi, gii, inset, legend, ncol = 2)
+t
+
+tmap_save(t, "hdi and gii.png")
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
